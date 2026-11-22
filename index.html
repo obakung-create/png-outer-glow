@@ -11,6 +11,10 @@
   body{margin:0;font-family:-apple-system,"Sukhumvit Set","Noto Sans Thai",system-ui,sans-serif;background:var(--bg);color:var(--text)}
   .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 40px}
   h1{font-size:22px;margin:0 0 16px}
+  .modal{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal[hidden]{display:none}
+  .modal-card{width:100%;max-width:760px;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .modal .resbox img{max-height:60vh}
   .actions{display:flex;gap:10px;margin-top:20px}
   .actions .dl{margin-top:0;flex:1}
   button.dl.alt{background:var(--card);color:var(--text);border:1px solid var(--line)}
@@ -128,7 +132,8 @@
     </div>
   </div>
 
-  <div class="card" id="result" hidden>
+  <div class="modal" id="result" hidden role="dialog" aria-modal="true" aria-label="ผลลัพธ์">
+   <div class="card modal-card">
     <div class="sec">ผลลัพธ์</div>
     <div class="resbox"><img id="resImg" alt="ภาพที่แก้ไขเสร็จแล้ว" draggable="false"></div>
     <div class="save-hint">📱 มือถือ: <b>กดค้างที่รูป</b> แล้วเลือก "บันทึกรูปภาพ" · คอมพิวเตอร์: คลิกขวาที่รูป "บันทึกรูปภาพเป็น…" หรือกดปุ่มดาวน์โหลด</div>
@@ -137,6 +142,7 @@
       <button class="dl alt" id="edit">← แก้ไข</button>
       <button class="dl" id="dl2">ดาวน์โหลด PNG</button>
     </div>
+   </div>
   </div>
 </div>
 
@@ -516,13 +522,17 @@ $('finish').addEventListener('click',()=>makeBlob((b,L)=>{
   resBlob=b; if(resUrl) URL.revokeObjectURL(resUrl);
   resUrl=URL.createObjectURL(b); $('resImg').src=resUrl;
   $('resInfo').textContent=`${L.W} × ${L.H} px · ${(b.size/1024/1024).toFixed(2)} MB · PNG`;
-  $('editor').hidden=true; $('result').hidden=false; window.scrollTo(0,0);
+  $('result').hidden=false; document.body.style.overflow='hidden';
+  $('result').querySelector('.modal-card').scrollTop=0;
 }));
-$('edit').addEventListener('click',()=>{
-  $('result').hidden=true; $('editor').hidden=false;
+function closeResult(){
+  if($('result').hidden) return;
+  $('result').hidden=true; document.body.style.overflow='';
   if(resUrl){URL.revokeObjectURL(resUrl);resUrl=null} $('resImg').removeAttribute('src'); resBlob=null;
-  redraw(); window.scrollTo(0,0);
-});
+}
+$('edit').addEventListener('click',closeResult);
+$('result').addEventListener('click',e=>{if(e.target===$('result'))closeResult()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeResult()});
 $('dl2').addEventListener('click',()=>{ if(resBlob) downloadBlob(resBlob,fileName()); });
 
 syncUI(); redraw();
