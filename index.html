@@ -201,10 +201,14 @@ const CURSORS={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resiz
 
 /* ---------- layout / output size ---------- */
 const padFor = () => Math.ceil(+$('size').value*1.5)+2;
+// Output keeps the native pixel size of the cropped area (no resampling).
+// Only scaled down if it would exceed what the browser's canvas can hold.
+const IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const MAX_AREA=IOS?16000000:120000000, MAX_SIDE=16000;
 function bgOut(){
-  const R=RATIOS[ratio]; if(R.W) return [R.W,R.H];
-  const k=Math.min(1,4096/Math.max(bgCrop.w,bgCrop.h));
-  return [Math.round(bgCrop.w*k), Math.round(bgCrop.h*k)];
+  let w=bgCrop.w, h=bgCrop.h;
+  const k=Math.min(1,MAX_SIDE/Math.max(w,h),Math.sqrt(MAX_AREA/(w*h)));
+  return [Math.max(1,Math.round(w*k)), Math.max(1,Math.round(h*k))];
 }
 function layout(){
   if(bgImg){
@@ -225,8 +229,8 @@ function defaultFw(){
 }
 
 /* ---------- glow ---------- */
-function glowFor(ow,oh){
-  const size=+$('size').value, op=+$('op').value/100, spread=+$('sp').value/100,
+function glowFor(ow,oh,size){
+  const op=+$('op').value/100, spread=+$('sp').value/100,
         passes=+$('pass').value, color=$('color').value;
   const key=[fgVer,fgCrop.x,fgCrop.y,fgCrop.w,fgCrop.h,ow,oh,size,op,spread,passes,color].join('|');
   if(glowCache.key===key) return glowCache;
@@ -258,11 +262,17 @@ function glowFor(ow,oh){
 }
 
 /* ---------- render the final composite ---------- */
-function renderTo(c,L){
-  if(c.width!==L.W||c.height!==L.H){c.width=L.W;c.height=L.H}
-  const x=c.getContext('2d'); x.clearRect(0,0,L.W,L.H);
-  if(L.hasBg){ x.imageSmoothingQuality='high'; x.drawImage(bgImg,bgCrop.x,bgCrop.y,bgCrop.w,bgCrop.h,0,0,L.W,L.H); }
-  if(fgImg){ const g=glowFor(L.ow,L.oh); x.drawImage(g.cv,Math.round(L.cx-L.ow/2-g.pad),Math.round(L.cy-L.oh/2-g.pad)); }
+// k = 1 for the real export; < 1 only for the on-screen preview of very large images
+function renderTo(c,L,k=1){
+  const W=Math.max(1,Math.round(L.W*k)), H=Math.max(1,Math.round(L.H*k));
+  if(c.width!==W||c.height!==H){c.width=W;c.height=H}
+  const x=c.getContext('2d'); x.clearRect(0,0,W,H);
+  if(L.hasBg){ x.imageSmoothingQuality='high'; x.drawImage(bgImg,bgCrop.x,bgCrop.y,bgCrop.w,bgCrop.h,0,0,W,H); }
+  if(fgImg){
+    const ow=Math.max(1,Math.round(L.ow*k)), oh=Math.max(1,Math.round(L.oh*k));
+    const g=glowFor(ow,oh,+$('size').value*k);
+    x.drawImage(g.cv,Math.round(L.cx*k-ow/2-g.pad),Math.round(L.cy*k-oh/2-g.pad));
+  }
 }
 
 /* ---------- stage drawing ---------- */
@@ -316,7 +326,7 @@ function drawCompose(W,H){
   }
   view=viewFor(L.W,L.H); const {s,ox,oy}=view;
   if(!L.hasBg) checker(ox,oy,L.W*s,L.H*s);
-  renderTo(outCv,L);
+  renderTo(outCv,L,Math.min(1,1600/Math.max(L.W,L.H)));
   ctx.imageSmoothingQuality='high'; ctx.drawImage(outCv,ox,oy,L.W*s,L.H*s);
   ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1; ctx.strokeRect(ox,oy,L.W*s,L.H*s);
   if(L.hasBg&&fgImg){
